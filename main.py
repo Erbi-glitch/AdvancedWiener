@@ -1,0 +1,479 @@
+# main.py
+#
+# Deterministic SNAP/edgelist loader (.txt/.edges, .gz, .tar.gz) +
+# randomized interleaving growth (leaf vs edge) with seed +
+# time benchmark (cumulative) + save PNG time plot.
+#
+# Usage:
+#   python main.py facebook.tar.gz --max-ops 1000 --seed 42 --p-edge 0.2 --time-plot-out time_plot.png
+#
+# Notes:
+# - This script reads dataset content as BYTES (no UTF-8 decode), so it avoids UnicodeDecodeError
+#   due to non-UTF8 text.
+# - Only .tar.gz / plain / .gz are supported here (NOT .zip).
+# - Growth ops are "valid": edge(u,v) is executed only after both endpoints are present in the
+#   current growing graph.
+#
+# Output:
+# - Prints dataset stats and how many leaf/edge ops were executed.
+# - Saves a PNG plot with cumulative time for baseline vs incremental.
+
+import os
+import time
+import gzip
+import tarfile
+import argparse
+import random
+from dataclasses import dataclass
+from typing import Iterable, List, Optional, Set, Tuple, Any, Deque, Dict
+from collections import deque, defaultdict
+
+import networkx as nx
+import matplotlib.pyplot as plt
+
+from wiener import WienerGrowingUnweightedExact
+
+
+# --------------------------- Robust byte reading utilities ---------------------------
+
+def _is_gzip_file(path: str) -> bool:
+    with open(path, "rb") as f:
+        return f.read(2) == b"\x1f\x8b"
+
+
+def _iter_lines_from_path_bytes(path: str) -> Iterable[bytes]:
+    opener = gzip.open if _is_gzip_file(path) else open
+    with opener(path, "rb") as f:
+        for raw in f:
+            yield raw
+
+
+def _looks_like_edgelist_name(name: str) -> bool:
+    low = name.lower()
+    return low.endswith((".txt", ".edges", ".edgelist", ".tsv", ".csv", ".txt.gz", ".edges.gz"))
+
+
+def _choose_tar_member(tf: tarfile.TarFile, member_name: Optional[str]) -> tarfile.TarInfo:
+    members = [m for m in tf.getmembers() if m.isfile()]
+    if not members:
+        raise FileNotFoundError("tar.gz contains no files")
+
+    if member_name:
+        for m in members:
+            if m.name == member_name:
+                return m
+        raise FileNotFoundError(f"member not found in archive: {member_name}")
+
+    # Deterministic pick: prefer edgelist-like files, pick largest, tie-break by name
+    candidates = [m for m in members if _looks_like_edgelist_name(m.name)]
+    if not candidates:
+        candidates = members
+
+    candidates.sort(key=lambda m: (-int(getattr(m, "size", 0)), m.name))
+    return candidates[0]
+
+
+def _iter_lines_from_tar_gz_bytes(path_tar_gz: str, member_name: Optional[str]) -> Iterable[bytes]:
+    # surrogateescape avoids UnicodeDecodeError on non-UTF8 member names
+    with tarfile.open(path_tar_gz, mode="r:gz", errors="surrogateescape") as tf:
+        chosen = _choose_tar_member(tf, member_name)
+        fobj = tf.extractfile(chosen)
+        if fobj is None:
+            raise IOError(f"cannot extract member: {chosen.name}")
+
+        if chosen.name.lower().endswith(".gz"):
+            with gzip.GzipFile(fileobj=fobj, mode="rb") as gz:
+                for raw in gz:
+                    yield raw
+        else:
+            for raw in fobj:
+                yield raw
+
+
+def load_edgelist_any(path: str, tar_member: Optional[str] = None) -> nx.Graph:
+    """
+    Load undirected graph from:
+      - plain edgelist
+      - gzipped edgelist
+      - tar.gz containing an edgelist
+
+    Parsing from bytes:
+      - skip empty and comment lines (#)
+      - take first 2 tokens as endpoints
+      - try int conversion, else keep bytes
+    """
+    G = nx.Graph()
+    low = path.lower()
+
+    if low.endswith(".tar.gz"):
+        line_iter = _iter_lines_from_tar_gz_bytes(path, tar_member)
+    else:
+        line_iter = _iter_lines_from_path_bytes(path)
+
+    for raw in line_iter:
+        raw = raw.strip()
+        if not raw or raw.startswith(b"#"):
+            continue
+        parts = raw.split()
+        if len(parts) < 2:
+            continue
+
+        u_raw, v_raw = parts[0], parts[1]
+        try:
+            u = int(u_raw)
+            v = int(v_raw)
+        except ValueError:
+            u = u_raw
+            v = v_raw
+
+        if u != v:
+            G.add_edge(u, v)
+
+    return G
+
+
+# --------------------------- Deterministic component + deterministic BFS tree ---------------------------
+
+def _repr_key(x: Any) -> str:
+    return repr(x)
+
+
+def _norm_edge(a: Any, b: Any) -> Tuple[Any, Any]:
+    return (a, b) if _repr_key(a) <= _repr_key(b) else (b, a)
+
+
+def largest_component_deterministic(G: nx.Graph) -> nx.Graph:
+    """
+    Pick largest connected component.
+    Tie-break: component with smallest min(repr(node)).
+    """
+    if G.number_of_nodes() == 0:
+        return G
+
+    if nx.is_connected(G):
+        return G
+
+    comps = list(nx.connected_components(G))
+    comps.sort(key=lambda c: (-len(c), min(_repr_key(x) for x in c)))
+    return G.subgraph(comps[0]).copy()
+
+
+def bfs_tree_edges_sorted(G: nx.Graph, root: Any) -> List[Tuple[Any, Any]]:
+    """
+    Deterministic BFS spanning tree edges:
+      - queue BFS
+      - neighbors iterated in sorted(G[u], key=repr)
+    Returns edges (parent, child) in discovery order.
+    """
+    seen: Set[Any] = {root}
+    q: Deque[Any] = deque([root])
+    tree_edges: List[Tuple[Any, Any]] = []
+
+    while q:
+        u = q.popleft()
+        for v in sorted(G[u], key=_repr_key):
+            if v in seen:
+                continue
+            seen.add(v)
+            q.append(v)
+            tree_edges.append((u, v))
+
+    return tree_edges
+
+
+# --------------------------- Randomized execution schedule (leaf vs edge) ---------------------------
+
+@dataclass(frozen=True)
+class Op:
+    kind: str   # "leaf" | "edge"
+    u: Any
+    v: Any
+
+
+def build_growth_structures(G: nx.Graph) -> Tuple[Any, Dict[Any, Deque[Any]], List[Tuple[Any, Any]]]:
+    """
+    From connected static graph G:
+      - choose root (min repr node)
+      - build BFS tree edges (deterministic)
+      - build children_by_parent: parent -> deque(children)
+      - build extra_edges: all edges not in BFS tree (normalized, sorted)
+    """
+    root = min(G.nodes(), key=_repr_key)
+
+    tree_edges = bfs_tree_edges_sorted(G, root)
+    tree_edge_set: Set[Tuple[Any, Any]] = set(_norm_edge(a, b) for a, b in tree_edges)
+
+    children_by_parent: Dict[Any, Deque[Any]] = defaultdict(deque)
+    for p, c in tree_edges:
+        children_by_parent[p].append(c)
+
+    extra_edges: List[Tuple[Any, Any]] = []
+    for a, b in G.edges():
+        e = _norm_edge(a, b)
+        if e not in tree_edge_set:
+            extra_edges.append(e)
+
+    extra_edges.sort(key=lambda e: (_repr_key(e[0]), _repr_key(e[1])))
+    return root, children_by_parent, extra_edges
+
+
+def make_randomized_ops(
+    root: Any,
+    children_by_parent: Dict[Any, Deque[Any]],
+    extra_edges: List[Tuple[Any, Any]],
+    max_ops: int,
+    seed: int,
+    p_edge: float,
+) -> List[Op]:
+    """
+    Create a randomized *valid* op sequence (up to max_ops) interleaving:
+      - leaf ops: add a new node child to an existing parent
+      - edge ops: add an extra edge where both endpoints are already active
+
+    Edge ops are enabled only when both endpoints have been added (are active).
+    """
+    rng = random.Random(seed)
+
+    active: Set[Any] = {root}
+
+    # Parents currently eligible to spawn a leaf (they are active and have children remaining)
+    leaf_parents: Set[Any] = set()
+    if children_by_parent.get(root):
+        leaf_parents.add(root)
+
+    # Build incidence lists for extra edges: node -> edge indices
+    incident: Dict[Any, List[int]] = defaultdict(list)
+    for idx, (a, b) in enumerate(extra_edges):
+        incident[a].append(idx)
+        incident[b].append(idx)
+
+    used_edge: Set[int] = set()
+    eligible_edges: Set[int] = set()  # indices into extra_edges, currently addable
+
+    def activate_edges_for_new_node(u: Any) -> None:
+        for idx in incident.get(u, []):
+            if idx in used_edge:
+                continue
+            a, b = extra_edges[idx]
+            other = b if a == u else a
+            if other in active:
+                eligible_edges.add(idx)
+
+    ops: List[Op] = []
+
+    for _ in range(max_ops):
+        has_leaf = len(leaf_parents) > 0
+        has_edge = len(eligible_edges) > 0
+
+        if not has_leaf and not has_edge:
+            break
+
+        # Decide whether to take edge or leaf
+        if has_leaf and has_edge:
+            choose_edge = (rng.random() < p_edge)
+        else:
+            choose_edge = has_edge  # if only edge exists, take it
+
+        if choose_edge:
+            idx = rng.choice(tuple(eligible_edges))
+            eligible_edges.remove(idx)
+            used_edge.add(idx)
+            a, b = extra_edges[idx]
+            ops.append(Op("edge", a, b))
+        else:
+            parent = rng.choice(tuple(leaf_parents))
+            child = children_by_parent[parent].popleft()
+            ops.append(Op("leaf", child, parent))
+
+            # Activate new node
+            active.add(child)
+
+            # Update leaf parents set
+            if not children_by_parent[parent]:
+                leaf_parents.discard(parent)
+            if children_by_parent.get(child):
+                leaf_parents.add(child)
+
+            # New node may enable some extra edges
+            activate_edges_for_new_node(child)
+
+    return ops
+
+
+# --------------------------- Dataset file selection ---------------------------
+
+def pick_dataset_file(script_dir: str, prefer: Optional[str]) -> str:
+    """
+    If prefer is given, use it (relative to script_dir if not absolute).
+    Else choose deterministically from directory:
+      - prefer .tar.gz first, then .gz, then plain
+      - tie-break by filename lexicographically
+    """
+    if prefer:
+        path = prefer
+        if not os.path.isabs(path):
+            path = os.path.join(script_dir, path)
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"dataset not found: {path}")
+        return path
+
+    exts = (".tar.gz", ".txt.gz", ".edges.gz", ".txt", ".edges", ".edgelist", ".tsv", ".csv")
+    candidates = []
+    for name in os.listdir(script_dir):
+        if name == os.path.basename(__file__):
+            continue
+        if name.lower().endswith(exts):
+            candidates.append(name)
+
+    if not candidates:
+        raise FileNotFoundError("No dataset file found next to the script.")
+
+    def rank(name: str) -> Tuple[int, str]:
+        low = name.lower()
+        if low.endswith(".tar.gz"):
+            r = 0
+        elif low.endswith(".gz"):
+            r = 1
+        else:
+            r = 2
+        return (r, name)
+
+    candidates.sort(key=rank)
+    return os.path.join(script_dir, candidates[0])
+
+
+# --------------------------- Benchmark (time-only) + plot ---------------------------
+
+def benchmark_time_arrays(root: Any, ops: List[Op]) -> dict:
+    """
+    Baseline:
+      - apply op to G_base
+      - time only nx.wiener_index(G_base) each step
+
+    Incremental:
+      - time full op handler (leaf BFS / edge full recompute inside tracker)
+    """
+    # Baseline
+    G_base = nx.Graph()
+    G_base.add_node(root)
+
+    baseline_step_times: List[float] = []
+    for op in ops:
+        if op.kind == "leaf":
+            G_base.add_node(op.u)
+            G_base.add_edge(op.u, op.v)
+        else:
+            G_base.add_edge(op.u, op.v)
+
+        ts = time.perf_counter()
+        _ = nx.wiener_index(G_base)
+        te = time.perf_counter()
+        baseline_step_times.append(te - ts)
+
+    baseline_cum = []
+    s = 0.0
+    for x in baseline_step_times:
+        s += x
+        baseline_cum.append(s)
+
+    # Incremental
+    inc = WienerGrowingUnweightedExact()
+    inc.add_initial_node(root)
+
+    inc_step_times: List[float] = []
+    leaf_count = 0
+    edge_count = 0
+
+    for op in ops:
+        ts = time.perf_counter()
+        if op.kind == "leaf":
+            inc.add_leaf(op.u, op.v)
+            leaf_count += 1
+        else:
+            inc.add_edge(op.u, op.v)
+            edge_count += 1
+        te = time.perf_counter()
+        inc_step_times.append(te - ts)
+
+    inc_cum = []
+    s = 0.0
+    for x in inc_step_times:
+        s += x
+        inc_cum.append(s)
+
+    return {
+        "ops_ran": len(ops),
+        "leaf_ops_ran": leaf_count,
+        "edge_ops_ran": edge_count,
+        "baseline_cum_times": baseline_cum,
+        "inc_cum_times": inc_cum,
+    }
+
+
+def save_time_plot_png(stats: dict, out_path: str) -> None:
+    n = min(len(stats["baseline_cum_times"]), len(stats["inc_cum_times"]))
+    x = list(range(1, n + 1))
+
+    plt.figure()
+    plt.plot(x, stats["baseline_cum_times"][:n], label="NetworkX cumulative")
+    plt.plot(x, stats["inc_cum_times"][:n], label="Incremental cumulative")
+    plt.xlabel("Step")
+    plt.ylabel("Cumulative time (s)")
+    plt.legend()
+    plt.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close()
+
+
+# --------------------------- Main ---------------------------
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description="Randomized leaf/edge growth + Wiener time plot PNG.")
+    ap.add_argument("dataset", nargs="?", default=None, help="Dataset file (same folder or full path).")
+    ap.add_argument("--tar-member", default=None, help="If dataset is .tar.gz, choose this member explicitly.")
+    ap.add_argument("--max-ops", type=int, default=1000, help="How many growth ops to execute.")
+    ap.add_argument("--seed", type=int, default=42, help="RNG seed for randomized interleaving.")
+    ap.add_argument("--p-edge", type=float, default=0.2, help="Probability to pick EDGE when both are available.")
+    ap.add_argument("--time-plot-out", default="time_plot.png", help="Output PNG path for time plot.")
+    args = ap.parse_args()
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    dataset_path = pick_dataset_file(script_dir, args.dataset)
+
+    print(f"Dataset file: {dataset_path}")
+
+    G = load_edgelist_any(dataset_path, tar_member=args.tar_member)
+    print(f"Loaded graph: nodes={G.number_of_nodes()}, edges={G.number_of_edges()}")
+
+    H = largest_component_deterministic(G)
+    print(f"Largest component: nodes={H.number_of_nodes()}, edges={H.number_of_edges()}")
+
+    if H.number_of_nodes() == 0:
+        print("Empty graph after component selection.")
+        return
+
+    root, children_by_parent, extra_edges = build_growth_structures(H)
+
+    leaf_total = H.number_of_nodes() - 1
+    edge_total = H.number_of_edges() - leaf_total
+    print(f"Planned totals in component: leaf_total={leaf_total}, edge_total={edge_total}")
+
+    ops = make_randomized_ops(
+        root=root,
+        children_by_parent=children_by_parent,
+        extra_edges=extra_edges,
+        max_ops=args.max_ops,
+        seed=args.seed,
+        p_edge=args.p_edge,
+    )
+
+    stats = benchmark_time_arrays(root, ops)
+    print(f"ops_ran: {stats['ops_ran']}")
+    print(f"leaf_ops_ran: {stats['leaf_ops_ran']}")
+    print(f"edge_ops_ran: {stats['edge_ops_ran']}")
+
+    save_time_plot_png(stats, args.time_plot_out)
+    print(f"Saved time plot to: {args.time_plot_out}")
+
+
+if __name__ == "__main__":
+    main()
