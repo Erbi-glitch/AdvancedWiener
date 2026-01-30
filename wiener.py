@@ -1,12 +1,3 @@
-# wiener_tracker.py
-#
-# Incremental exact Wiener index tracker for growing unweighted undirected graphs.
-#
-# Policy:
-#   - add_leaf(u, attach_to): exact fast update using one BFS from the new node
-#   - add_edge(a, b): exact update by full recomputation via nx.wiener_index
-
-
 from typing import Any
 import networkx as nx
 

@@ -1,23 +1,3 @@
-# main.py
-#
-# Deterministic SNAP/edgelist loader (.txt/.edges, .gz, .tar.gz) +
-# randomized interleaving growth (leaf vs edge) with seed +
-# time benchmark (cumulative) + save PNG time plot.
-#
-# Usage:
-#   python main.py facebook.tar.gz --max-ops 1000 --seed 42 --p-edge 0.2 --time-plot-out time_plot.png
-#
-# Notes:
-# - This script reads dataset content as BYTES (no UTF-8 decode), so it avoids UnicodeDecodeError
-#   due to non-UTF8 text.
-# - Only .tar.gz / plain / .gz are supported here (NOT .zip).
-# - Growth ops are "valid": edge(u,v) is executed only after both endpoints are present in the
-#   current growing graph.
-#
-# Output:
-# - Prints dataset stats and how many leaf/edge ops were executed.
-# - Saves a PNG plot with cumulative time for baseline vs incremental.
-
 import os
 import time
 import gzip
