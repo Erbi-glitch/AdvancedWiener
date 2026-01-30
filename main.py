@@ -31,7 +31,7 @@ from collections import deque, defaultdict
 import networkx as nx
 import matplotlib.pyplot as plt
 
-from wiener import WienerGrowingUnweightedExact
+from wiener import WienerGrowingUnweighted
 
 
 # --------------------------- Robust byte reading utilities ---------------------------
@@ -64,7 +64,7 @@ def _choose_tar_member(tf: tarfile.TarFile, member_name: Optional[str]) -> tarfi
                 return m
         raise FileNotFoundError(f"member not found in archive: {member_name}")
 
-    # Deterministic pick: prefer edgelist-like files, pick largest, tie-break by name
+    #выбор: предпочтение отдается файлам, похожим на edgelist, выбирается самый большой файл, при равенстве значений решающим является имя.
     candidates = [m for m in members if _looks_like_edgelist_name(m.name)]
     if not candidates:
         candidates = members
@@ -74,7 +74,7 @@ def _choose_tar_member(tf: tarfile.TarFile, member_name: Optional[str]) -> tarfi
 
 
 def _iter_lines_from_tar_gz_bytes(path_tar_gz: str, member_name: Optional[str]) -> Iterable[bytes]:
-    # surrogateescape avoids UnicodeDecodeError on non-UTF8 member names
+    # Функция предотвращает ошибку UnicodeDecodeError для имен элементов, не использующих кодировку UTF8.
     with tarfile.open(path_tar_gz, mode="r:gz", errors="surrogateescape") as tf:
         chosen = _choose_tar_member(tf, member_name)
         fobj = tf.extractfile(chosen)
@@ -91,17 +91,8 @@ def _iter_lines_from_tar_gz_bytes(path_tar_gz: str, member_name: Optional[str]) 
 
 
 def load_edgelist_any(path: str, tar_member: Optional[str] = None) -> nx.Graph:
-    """
-    Load undirected graph from:
-      - plain edgelist
-      - gzipped edgelist
-      - tar.gz containing an edgelist
+    #Загрузка неориентированного графа
 
-    Parsing from bytes:
-      - skip empty and comment lines (#)
-      - take first 2 tokens as endpoints
-      - try int conversion, else keep bytes
-    """
     G = nx.Graph()
     low = path.lower()
 
@@ -143,10 +134,10 @@ def _norm_edge(a: Any, b: Any) -> Tuple[Any, Any]:
 
 
 def largest_component_deterministic(G: nx.Graph) -> nx.Graph:
-    """
-    Pick largest connected component.
-    Tie-break: component with smallest min(repr(node)).
-    """
+    
+    #Выберите наибольшую связную компоненту
+    #В случае равенства результатов: компонент с наименьшим значением min(repr(node))
+
     if G.number_of_nodes() == 0:
         return G
 
@@ -159,12 +150,10 @@ def largest_component_deterministic(G: nx.Graph) -> nx.Graph:
 
 
 def bfs_tree_edges_sorted(G: nx.Graph, root: Any) -> List[Tuple[Any, Any]]:
-    """
-    Deterministic BFS spanning tree edges:
-      - queue BFS
-      - neighbors iterated in sorted(G[u], key=repr)
-    Returns edges (parent, child) in discovery order.
-    """
+
+    #Детерминированный поиск ребер в ширину (BFS)
+    #Возвращает ребра (родитель, потомок) в порядке обнаружения
+
     seen: Set[Any] = {root}
     q: Deque[Any] = deque([root])
     tree_edges: List[Tuple[Any, Any]] = []
@@ -191,13 +180,13 @@ class Op:
 
 
 def build_growth_structures(G: nx.Graph) -> Tuple[Any, Dict[Any, Deque[Any]], List[Tuple[Any, Any]]]:
-    """
-    From connected static graph G:
-      - choose root (min repr node)
-      - build BFS tree edges (deterministic)
-      - build children_by_parent: parent -> deque(children)
-      - build extra_edges: all edges not in BFS tree (normalized, sorted)
-    """
+
+    #Из связного статического графа G:
+    #выбраем корень (узел с минимальным представлением)
+    #строим ребра дерева BFS (детерминированное)
+    #затем children_by_parent: родитель -> deque(children)
+    #строим extra_edges: все ребра, не входящие в дерево BFS (нормализованные, отсортированные)
+
     root = min(G.nodes(), key=_repr_key)
 
     tree_edges = bfs_tree_edges_sorted(G, root)
@@ -225,30 +214,27 @@ def make_randomized_ops(
     seed: int,
     p_edge: float,
 ) -> List[Op]:
-    """
-    Create a randomized *valid* op sequence (up to max_ops) interleaving:
-      - leaf ops: add a new node child to an existing parent
-      - edge ops: add an extra edge where both endpoints are already active
 
-    Edge ops are enabled only when both endpoints have been added (are active).
-    """
+    #Создаем случайную *допустимую* последовательность операций (до max_ops), чередуя
+    #операции с листьями, операции с ребрами
+
     rng = random.Random(seed)
 
     active: Set[Any] = {root}
 
-    # Parents currently eligible to spawn a leaf (they are active and have children remaining)
+    # Родитель может заспавнить leaf
     leaf_parents: Set[Any] = set()
     if children_by_parent.get(root):
         leaf_parents.add(root)
 
-    # Build incidence lists for extra edges: node -> edge indices
+    # Создает списки инцидентности для дополнительных ребер: node -> edge
     incident: Dict[Any, List[int]] = defaultdict(list)
     for idx, (a, b) in enumerate(extra_edges):
         incident[a].append(idx)
         incident[b].append(idx)
 
     used_edge: Set[int] = set()
-    eligible_edges: Set[int] = set()  # indices into extra_edges, currently addable
+    eligible_edges: Set[int] = set()
 
     def activate_edges_for_new_node(u: Any) -> None:
         for idx in incident.get(u, []):
@@ -268,11 +254,11 @@ def make_randomized_ops(
         if not has_leaf and not has_edge:
             break
 
-        # Decide whether to take edge or leaf
+        # Рандомный выбор
         if has_leaf and has_edge:
             choose_edge = (rng.random() < p_edge)
         else:
-            choose_edge = has_edge  # if only edge exists, take it
+            choose_edge = has_edge  # если остаются edge
 
         if choose_edge:
             idx = rng.choice(tuple(eligible_edges))
@@ -285,16 +271,15 @@ def make_randomized_ops(
             child = children_by_parent[parent].popleft()
             ops.append(Op("leaf", child, parent))
 
-            # Activate new node
+            # новый узел
             active.add(child)
 
-            # Update leaf parents set
+            # обновляем
             if not children_by_parent[parent]:
                 leaf_parents.discard(parent)
             if children_by_parent.get(child):
                 leaf_parents.add(child)
 
-            # New node may enable some extra edges
             activate_edges_for_new_node(child)
 
     return ops
@@ -303,12 +288,9 @@ def make_randomized_ops(
 # --------------------------- Dataset file selection ---------------------------
 
 def pick_dataset_file(script_dir: str, prefer: Optional[str]) -> str:
-    """
-    If prefer is given, use it (relative to script_dir if not absolute).
-    Else choose deterministically from directory:
-      - prefer .tar.gz first, then .gz, then plain
-      - tie-break by filename lexicographically
-    """
+
+    #prefet -> .tar.gz -> .gz -> plain
+
     if prefer:
         path = prefer
         if not os.path.isabs(path):
@@ -325,8 +307,6 @@ def pick_dataset_file(script_dir: str, prefer: Optional[str]) -> str:
         if name.lower().endswith(exts):
             candidates.append(name)
 
-    if not candidates:
-        raise FileNotFoundError("No dataset file found next to the script.")
 
     def rank(name: str) -> Tuple[int, str]:
         low = name.lower()
@@ -346,14 +326,13 @@ def pick_dataset_file(script_dir: str, prefer: Optional[str]) -> str:
 
 def benchmark_time_arrays(root: Any, ops: List[Op]) -> dict:
     """
-    Baseline:
-      - apply op to G_base
-      - time only nx.wiener_index(G_base) each step
-
-    Incremental:
-      - time full op handler (leaf BFS / edge full recompute inside tracker)
+    функция из библиотеки:
+    - применить операцию к G_base
+    - измерять время выполнения nx.wiener_index(G_base) на каждом шаге
+    моя функция:
+    - измерять время выполнения обработчика операции (полный поиск в ширину листа / пересчет ребра)
     """
-    # Baseline
+    # функция из библиотеки
     G_base = nx.Graph()
     G_base.add_node(root)
 
@@ -376,8 +355,8 @@ def benchmark_time_arrays(root: Any, ops: List[Op]) -> dict:
         s += x
         baseline_cum.append(s)
 
-    # Incremental
-    inc = WienerGrowingUnweightedExact()
+    # моя функция
+    inc = WienerGrowingUnweighted()
     inc.add_initial_node(root)
 
     inc_step_times: List[float] = []
@@ -427,13 +406,14 @@ def save_time_plot_png(stats: dict, out_path: str) -> None:
 # --------------------------- Main ---------------------------
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Randomized leaf/edge growth + Wiener time plot PNG.")
-    ap.add_argument("dataset", nargs="?", default=None, help="Dataset file (same folder or full path).")
-    ap.add_argument("--tar-member", default=None, help="If dataset is .tar.gz, choose this member explicitly.")
-    ap.add_argument("--max-ops", type=int, default=1000, help="How many growth ops to execute.")
-    ap.add_argument("--seed", type=int, default=42, help="RNG seed for randomized interleaving.")
-    ap.add_argument("--p-edge", type=float, default=0.2, help="Probability to pick EDGE when both are available.")
-    ap.add_argument("--time-plot-out", default="time_plot.png", help="Output PNG path for time plot.")
+    #аргументы командной строки
+    ap = argparse.ArgumentParser()
+    ap.add_argument("dataset", nargs="?", default=None)
+    ap.add_argument("--tar-member", default=None)
+    ap.add_argument("--max-ops", type=int, default=1000)
+    ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--p-edge", type=float, default=0.2)
+    ap.add_argument("--time-plot-out", default="time_plot.png")
     args = ap.parse_args()
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
