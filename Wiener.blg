@@ -1,0 +1,17 @@
+[0] Config.pm:307> INFO - This is Biber 2.19
+[0] Config.pm:310> INFO - Logfile is 'Wiener.blg'
+[81] biber-MSWIN64:340> INFO - === 
+[113] Biber.pm:419> INFO - Reading 'Wiener.bcf'
+[189] Biber.pm:976> INFO - Using all citekeys in bib section 0
+[199] Biber.pm:4419> INFO - Processing section 0
+[209] Biber.pm:4610> INFO - Looking for bibtex file 'refs.bib' for section 0
+[267] bibtex.pm:1713> INFO - LaTeX decoding ...
+[285] bibtex.pm:1519> INFO - Found BibTeX data source 'refs.bib'
+[330] UCollate.pm:68> INFO - Overriding locale 'ru-RU' defaults 'normalization = NFD' with 'normalization = prenormalized'
+[331] UCollate.pm:68> INFO - Overriding locale 'ru-RU' defaults 'variable = shifted' with 'variable = non-ignorable'
+[331] Biber.pm:4239> INFO - Sorting list 'none/global//global/global' of type 'entry' with template 'none' and locale 'ru-RU'
+[331] Biber.pm:4245> INFO - No sort tailoring available for locale 'ru-RU'
+[336] bbl.pm:660> INFO - Writing 'Wiener.bbl' with encoding 'UTF-8'
+[338] bbl.pm:763> INFO - Output to Wiener.bbl
+[338] Biber.pm:131> WARN - legacy month field 'aug' in entry 'HagbergSchultSwart2008_NetworkX' is not an integer - this will probably not sort properly.
+[338] Biber.pm:133> INFO - WARNINGS: 1

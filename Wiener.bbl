@@ -1,0 +1,181 @@
+% $ biblatex auxiliary file $
+% $ biblatex bbl format version 3.2 $
+% Do not modify the above lines!
+%
+% This is an auxiliary file used by the 'biblatex' package.
+% This file may safely be deleted. It will be recreated by
+% biber as required.
+%
+\begingroup
+\makeatletter
+\@ifundefined{ver@biblatex.sty}
+  {\@latex@error
+     {Missing 'biblatex' package}
+     {The bibliography requires the 'biblatex' package.}
+      \aftergroup\endinput}
+  {}
+\endgroup
+
+
+\refsection{0}
+  \datalist[entry]{none/global//global/global}
+    \entry{AltassanAhmad2025_Gnk}{article}{}
+      \name{author}{2}{}{%
+        {{hash=548a5d4a823b2b3444e747d164a31408}{%
+           family={Altassan},
+           familyi={A\bibinitperiod},
+           given={A.},
+           giveni={A\bibinitperiod}}}%
+        {{hash=918f4a296d45a84541aa48fa7441f567}{%
+           family={Ahmad},
+           familyi={A\bibinitperiod},
+           given={H.},
+           giveni={H\bibinitperiod}}}%
+      }
+      \strng{namehash}{5dfc944289b7c0559cab2441aaa07682}
+      \strng{fullhash}{5dfc944289b7c0559cab2441aaa07682}
+      \strng{bibnamehash}{5dfc944289b7c0559cab2441aaa07682}
+      \strng{authorbibnamehash}{5dfc944289b7c0559cab2441aaa07682}
+      \strng{authornamehash}{5dfc944289b7c0559cab2441aaa07682}
+      \strng{authorfullhash}{5dfc944289b7c0559cab2441aaa07682}
+      \field{sortinit}{2}
+      \field{sortinithash}{8b555b3791beccb63322c22f3320aa9a}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Malaysian Journal of Mathematical Sciences}
+      \field{number}{4}
+      \field{title}{Computation of Distance-Based Polynomials and Topological Indices for Generalized Friendship Graphs (G (n, k)): A Python-Based Approach}
+      \field{volume}{19}
+      \field{year}{2025}
+      \true{nocite}
+      \field{pages}{1453\bibrangedash 1470}
+      \range{pages}{18}
+      \verb{doi}
+      \verb 10.47836/mjms.19.4.15
+      \endverb
+    \endentry
+    \entry{MoharPisanski1988_Wiener}{article}{}
+      \name{author}{2}{}{%
+        {{hash=984a9c4e45e3489881e4a5220c9d1254}{%
+           family={Mohar},
+           familyi={M\bibinitperiod},
+           given={Bojan},
+           giveni={B\bibinitperiod}}}%
+        {{hash=53a9807b2b19afcc10b22c1ae5c9e7b9}{%
+           family={Pisanski},
+           familyi={P\bibinitperiod},
+           given={Tomaž},
+           giveni={T\bibinitperiod}}}%
+      }
+      \strng{namehash}{ce99ad7f58ea11c099843b80dc42b28b}
+      \strng{fullhash}{ce99ad7f58ea11c099843b80dc42b28b}
+      \strng{bibnamehash}{ce99ad7f58ea11c099843b80dc42b28b}
+      \strng{authorbibnamehash}{ce99ad7f58ea11c099843b80dc42b28b}
+      \strng{authornamehash}{ce99ad7f58ea11c099843b80dc42b28b}
+      \strng{authorfullhash}{ce99ad7f58ea11c099843b80dc42b28b}
+      \field{sortinit}{3}
+      \field{sortinithash}{ad6fe7482ffbd7b9f99c9e8b5dccd3d7}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Journal of Mathematical Chemistry}
+      \field{title}{How to compute the Wiener index of a graph}
+      \field{volume}{2}
+      \field{year}{1988}
+      \true{nocite}
+      \field{pages}{267\bibrangedash 277}
+      \range{pages}{11}
+      \verb{doi}
+      \verb 10.1007/BF01167206
+      \endverb
+    \endentry
+    \entry{Wiki_WienerIndex_ru}{misc}{}
+      \field{sortinit}{4}
+      \field{sortinithash}{9381316451d1b9788675a07e972a12a7}
+      \field{labeltitlesource}{title}
+      \field{howpublished}{Википедия}
+      \field{title}{Индекс Винера}
+      \true{nocite}
+      \verb{urlraw}
+      \verb https://ru.wikipedia.org/wiki/%D0%98%D0%BD%D0%B4%D0%B5%D0%BA%D1%81_%D0%92%D0%B8%D0%BD%D0%B5%D1%80%D0%B0
+      \endverb
+      \verb{url}
+      \verb https://ru.wikipedia.org/wiki/%D0%98%D0%BD%D0%B4%D0%B5%D0%BA%D1%81_%D0%92%D0%B8%D0%BD%D0%B5%D1%80%D0%B0
+      \endverb
+    \endentry
+    \entry{HagbergSchultSwart2008_NetworkX}{inproceedings}{}
+      \name{author}{3}{}{%
+        {{hash=94707ad079516150870c2f9a2932df46}{%
+           family={Hagberg},
+           familyi={H\bibinitperiod},
+           given={Aric\bibnamedelima A.},
+           giveni={A\bibinitperiod\bibinitdelim A\bibinitperiod}}}%
+        {{hash=12f80aa3aca50b90f024775e52dde170}{%
+           family={Schult},
+           familyi={S\bibinitperiod},
+           given={Daniel\bibnamedelima A.},
+           giveni={D\bibinitperiod\bibinitdelim A\bibinitperiod}}}%
+        {{hash=58fb3a96810da0d56606677a3ce7e677}{%
+           family={Swart},
+           familyi={S\bibinitperiod},
+           given={Pieter\bibnamedelima J.},
+           giveni={P\bibinitperiod\bibinitdelim J\bibinitperiod}}}%
+      }
+      \name{editor}{3}{}{%
+        {{hash=cfa3239dded54488f9a82a5718d5b927}{%
+           family={Varoquaux},
+           familyi={V\bibinitperiod},
+           given={Gaël},
+           giveni={G\bibinitperiod}}}%
+        {{hash=5d98f8482048dcc3052b092b91de894c}{%
+           family={Vaught},
+           familyi={V\bibinitperiod},
+           given={Travis},
+           giveni={T\bibinitperiod}}}%
+        {{hash=eca9aeefdc8563b0e153fbedf08bc1a1}{%
+           family={Millman},
+           familyi={M\bibinitperiod},
+           given={Jarrod},
+           giveni={J\bibinitperiod}}}%
+      }
+      \list{location}{1}{%
+        {Pasadena, CA, USA}%
+      }
+      \strng{namehash}{3a1b2e51fcffd45628935c7b6334f944}
+      \strng{fullhash}{3a1b2e51fcffd45628935c7b6334f944}
+      \strng{bibnamehash}{3a1b2e51fcffd45628935c7b6334f944}
+      \strng{authorbibnamehash}{3a1b2e51fcffd45628935c7b6334f944}
+      \strng{authornamehash}{3a1b2e51fcffd45628935c7b6334f944}
+      \strng{authorfullhash}{3a1b2e51fcffd45628935c7b6334f944}
+      \strng{editorbibnamehash}{5c6f569244b62f16c51830f1dac15458}
+      \strng{editornamehash}{5c6f569244b62f16c51830f1dac15458}
+      \strng{editorfullhash}{5c6f569244b62f16c51830f1dac15458}
+      \field{sortinit}{5}
+      \field{sortinithash}{20e9b4b0b173788c5dace24730f47d8c}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{booktitle}{Proceedings of the 7th Python in Science Conference (SciPy 2008)}
+      \field{month}{8}
+      \field{title}{Exploring network structure, dynamics, and function using NetworkX}
+      \field{year}{2008}
+      \true{nocite}
+      \field{pages}{11\bibrangedash 15}
+      \range{pages}{5}
+    \endentry
+    \entry{NetworkX_Website}{misc}{}
+      \field{sortinit}{6}
+      \field{sortinithash}{b33bc299efb3c36abec520a4c896a66d}
+      \field{labeltitlesource}{title}
+      \field{howpublished}{Официальная документация}
+      \field{title}{NetworkX: Software for Complex Networks}
+      \true{nocite}
+      \verb{urlraw}
+      \verb https://networkx.org/en/
+      \endverb
+      \verb{url}
+      \verb https://networkx.org/en/
+      \endverb
+    \endentry
+  \enddatalist
+\endrefsection
+\endinput
+
